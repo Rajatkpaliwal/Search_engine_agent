@@ -1,13 +1,9 @@
-langchain-openai
 langchain
 python-dotenv
 langchain_community
-huggingface_hub
 langchain_core
 langchain_groq
 streamlit
-langchain_huggingface
-pypdf
 arxiv
 wikipedia
 duckduckgo-search
