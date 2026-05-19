@@ -89,7 +89,7 @@ if prompt:
     )
 
 
-    agent = create_react_agent(
+    agent = create_agent(
         model=llm,
         tools=tools
     )
