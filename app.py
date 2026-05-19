@@ -1,47 +1,147 @@
 import streamlit as st
-from langchain_groq import ChatGroq
-from langchain_community.utilities import ArxivAPIWrapper, WikipediaAPIWrapper
-from langchain_community.tools import ArxivQueryRun, WikipediaQueryRun, DuckDuckGoSearchRun
-from langchain.agents import initialize_agent, AgentType
-from langchain_community.callbacks import StreamlitCallbackHandler
-import os
 from dotenv import load_dotenv
+import os
 
-# Arxiv and Wikipedia tools
-arxiv_wrapper = ArxivAPIWrapper(top_k_results = 1, doc_content_chars_max = 200)
-arxiv = ArxivQueryRun(api_wrapper = arxiv_wrapper)
+from langchain_groq import ChatGroq
+from langchain.agents import initialize_agent, AgentType
 
-wiki_wrapper = WikipediaAPIWrapper(top_k_results = 1, doc_content_chars_max = 200)
-wiki = WikipediaQueryRun(api_wrapper = wiki_wrapper)
+from langchain_community.tools import (
+    DuckDuckGoSearchRun,
+    WikipediaQueryRun,
+    ArxivQueryRun,
+)
 
-search = DuckDuckGoSearchRun(name = "Search")
+from langchain_community.utilities import (
+    WikipediaAPIWrapper,
+    ArxivAPIWrapper,
+)
 
-st.set_page_config(page_title="LangChain Chat with Search", page_icon="🔍", layout="wide")
+from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
+
+# Load environment variables
+load_dotenv()
+
+# ---------------- PAGE CONFIG ---------------- #
+st.set_page_config(
+    page_title="LangChain Chat with Search",
+    page_icon="🔍",
+    layout="wide"
+)
+
 st.title("🔍 LangChain Chat with Search")
 
-# Sidebar for settings
+# ---------------- SIDEBAR ---------------- #
 st.sidebar.title("Settings")
-api_key = st.sidebar.text_input("Enter your Groq API key: ", type = "password")
+
+api_key = st.sidebar.text_input(
+    "Enter your Groq API Key",
+    type="password"
+)
+
+# ---------------- TOOLS ---------------- #
+
+# Arxiv Tool
+arxiv_wrapper = ArxivAPIWrapper(
+    top_k_results=1,
+    doc_content_chars_max=300
+)
+
+arxiv_tool = ArxivQueryRun(api_wrapper=arxiv_wrapper)
+
+# Wikipedia Tool
+wiki_wrapper = WikipediaAPIWrapper(
+    top_k_results=1,
+    doc_content_chars_max=300
+)
+
+wiki_tool = WikipediaQueryRun(api_wrapper=wiki_wrapper)
+
+# DuckDuckGo Search Tool
+search_tool = DuckDuckGoSearchRun(name="Search")
+
+tools = [search_tool, wiki_tool, arxiv_tool]
+
+# ---------------- SESSION STATE ---------------- #
 
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [
-        {"role":"assistant", "content": "Hi,I'm a chatboat who can search the web. How can I help you?"}
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "Hi! I am an AI assistant with web search capabilities. How can I help you?"
+        }
     ]
 
+# Display chat history
 for msg in st.session_state.messages:
-    st.chat_message(msg['role']).write(msg['content'])
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-if prompt:=st.chat_input(placeholder = "What is machine learning?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.chat_message("user").write(prompt)
+# ---------------- CHAT INPUT ---------------- #
 
-    llm = ChatGroq(groq_api_key = api_key,model_name = "Llama3-8b-8192", streaming = True)
-    tools = [search, arxiv, wiki]
+prompt = st.chat_input("Ask anything...")
 
-    search_agent = initialize_agent(tools, llm, agent = AgentType.ZERO_SHOT_REACT_DESCRIPTION, handling_parsing_errors = True)
+if prompt:
+
+    # Check API key
+    if not api_key:
+        st.error("Please enter your Groq API key.")
+        st.stop()
+
+    # Store user message
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt
+        }
+    )
+
+    # Display user message
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    # ---------------- LLM ---------------- #
+
+    llm = ChatGroq(
+        groq_api_key=api_key,
+        model_name="llama3-8b-8192",
+        streaming=True
+    )
+
+    # ---------------- AGENT ---------------- #
+
+    agent = initialize_agent(
+        tools=tools,
+        llm=llm,
+        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True,
+        handle_parsing_errors=True
+    )
+
+    # ---------------- ASSISTANT RESPONSE ---------------- #
 
     with st.chat_message("assistant"):
-        st_cb = StreamlitCallbackHandler(st.container(), expand_new_thoughts = False)
-        response = search_agent.run(st.session_state.messages, callbacks = [st_cb])
-        st.session_state.messages.append({'role': 'assistant', 'content': response})
-        st.write(response)
+
+        st_cb = StreamlitCallbackHandler(
+            parent_container=st.container(),
+            expand_new_thoughts=False
+        )
+
+        try:
+            # IMPORTANT FIX:
+            # agent.run() expects STRING input not message list
+            response = agent.run(
+                prompt,
+                callbacks=[st_cb]
+            )
+
+            st.write(response)
+
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": response
+                }
+            )
+
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
