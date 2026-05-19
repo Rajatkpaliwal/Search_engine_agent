@@ -14,22 +14,19 @@ from langchain_community.utilities import (
     ArxivAPIWrapper,
 )
 
-from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
-
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain import hub
+from langgraph.prebuilt import create_react_agent
 
 # ---------------- LOAD ENV ---------------- #
 load_dotenv()
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
-    page_title="LangChain Search Agent",
+    page_title="AI Search Agent",
     page_icon="🔍",
     layout="wide"
 )
 
-st.title("🔍 LangChain Search Agent")
+st.title("🔍 AI Search Agent")
 
 # ---------------- SIDEBAR ---------------- #
 st.sidebar.title("Settings")
@@ -41,38 +38,35 @@ api_key = st.sidebar.text_input(
 
 # ---------------- TOOLS ---------------- #
 
-# Arxiv Tool
-arxiv_wrapper = ArxivAPIWrapper(
-    top_k_results=1,
-    doc_content_chars_max=300
-)
-
-arxiv_tool = ArxivQueryRun(api_wrapper=arxiv_wrapper)
-
-# Wikipedia Tool
-wiki_wrapper = WikipediaAPIWrapper(
-    top_k_results=1,
-    doc_content_chars_max=300
-)
-
-wiki_tool = WikipediaQueryRun(api_wrapper=wiki_wrapper)
-
-# Search Tool
 search_tool = DuckDuckGoSearchRun(name="Search")
+
+wiki_tool = WikipediaQueryRun(
+    api_wrapper=WikipediaAPIWrapper(
+        top_k_results=1,
+        doc_content_chars_max=300
+    )
+)
+
+arxiv_tool = ArxivQueryRun(
+    api_wrapper=ArxivAPIWrapper(
+        top_k_results=1,
+        doc_content_chars_max=300
+    )
+)
 
 tools = [search_tool, wiki_tool, arxiv_tool]
 
-# ---------------- CHAT HISTORY ---------------- #
+# ---------------- SESSION STATE ---------------- #
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Hi! I can search the web. Ask me anything."
+            "content": "Hi! I am an AI search agent. Ask me anything."
         }
     ]
 
-# Display messages
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
@@ -87,6 +81,7 @@ if prompt:
         st.error("Please enter your Groq API key.")
         st.stop()
 
+    # Store user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -94,6 +89,7 @@ if prompt:
         }
     )
 
+    # Display user message
     with st.chat_message("user"):
         st.write(prompt)
 
@@ -101,59 +97,45 @@ if prompt:
 
     llm = ChatGroq(
         groq_api_key=api_key,
-        model_name="llama3-8b-8192",
-        streaming=True
+        model_name="llama3-8b-8192"
     )
 
-    # ---------------- PROMPT TEMPLATE ---------------- #
-
-    react_prompt = hub.pull("hwchase17/react")
-
-    # ---------------- CREATE AGENT ---------------- #
+    # ---------------- AGENT ---------------- #
 
     agent = create_react_agent(
-        llm=llm,
-        tools=tools,
-        prompt=react_prompt
-    )
-
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True
+        model=llm,
+        tools=tools
     )
 
     # ---------------- RESPONSE ---------------- #
 
     with st.chat_message("assistant"):
 
-        st_cb = StreamlitCallbackHandler(
-            st.container(),
-            expand_new_thoughts=False
-        )
+        with st.spinner("Thinking..."):
 
-        try:
+            try:
 
-            response = agent_executor.invoke(
-                {
-                    "input": prompt
-                },
-                {
-                    "callbacks": [st_cb]
-                }
-            )
+                response = agent.invoke(
+                    {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    }
+                )
 
-            output = response["output"]
+                output = response["messages"][-1].content
 
-            st.write(output)
+                st.write(output)
 
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": output
-                }
-            )
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": output
+                    }
+                )
 
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
