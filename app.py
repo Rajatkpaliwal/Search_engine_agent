@@ -16,10 +16,7 @@ from langchain_community.utilities import (
 
 from langgraph.prebuilt import create_react_agent
 
-# ---------------- LOAD ENV ---------------- #
 load_dotenv()
-
-# ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
     page_title="AI Search Agent",
     page_icon="🔍",
@@ -28,15 +25,12 @@ st.set_page_config(
 
 st.title("🔍 AI Search Agent")
 
-# ---------------- SIDEBAR ---------------- #
 st.sidebar.title("Settings")
 
 api_key = st.sidebar.text_input(
     "Enter Groq API Key",
     type="password"
 )
-
-# ---------------- TOOLS ---------------- #
 
 search_tool = DuckDuckGoSearchRun(name="Search")
 
@@ -56,7 +50,6 @@ arxiv_tool = ArxivQueryRun(
 
 tools = [search_tool, wiki_tool, arxiv_tool]
 
-# ---------------- SESSION STATE ---------------- #
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -66,12 +59,10 @@ if "messages" not in st.session_state:
         }
     ]
 
-# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# ---------------- USER INPUT ---------------- #
 
 prompt = st.chat_input("Ask anything...")
 
@@ -81,7 +72,6 @@ if prompt:
         st.error("Please enter your Groq API key.")
         st.stop()
 
-    # Store user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -89,25 +79,20 @@ if prompt:
         }
     )
 
-    # Display user message
     with st.chat_message("user"):
         st.write(prompt)
 
-    # ---------------- LLM ---------------- #
 
     llm = ChatGroq(
         groq_api_key=api_key,
-        model_name="llama3-8b-8192"
+        model_name="llama-3.3-70b-versatile"
     )
 
-    # ---------------- AGENT ---------------- #
 
     agent = create_react_agent(
         model=llm,
         tools=tools
     )
-
-    # ---------------- RESPONSE ---------------- #
 
     with st.chat_message("assistant"):
 
