@@ -1,9 +1,7 @@
 import streamlit as st
 from dotenv import load_dotenv
-import os
 
 from langchain_groq import ChatGroq
-from langchain.agents import initialize_agent, AgentType
 
 from langchain_community.tools import (
     DuckDuckGoSearchRun,
@@ -18,23 +16,26 @@ from langchain_community.utilities import (
 
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 
-# Load environment variables
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain import hub
+
+# ---------------- LOAD ENV ---------------- #
 load_dotenv()
 
 # ---------------- PAGE CONFIG ---------------- #
 st.set_page_config(
-    page_title="LangChain Chat with Search",
+    page_title="LangChain Search Agent",
     page_icon="🔍",
     layout="wide"
 )
 
-st.title("🔍 LangChain Chat with Search")
+st.title("🔍 LangChain Search Agent")
 
 # ---------------- SIDEBAR ---------------- #
 st.sidebar.title("Settings")
 
 api_key = st.sidebar.text_input(
-    "Enter your Groq API Key",
+    "Enter Groq API Key",
     type="password"
 )
 
@@ -56,38 +57,36 @@ wiki_wrapper = WikipediaAPIWrapper(
 
 wiki_tool = WikipediaQueryRun(api_wrapper=wiki_wrapper)
 
-# DuckDuckGo Search Tool
+# Search Tool
 search_tool = DuckDuckGoSearchRun(name="Search")
 
 tools = [search_tool, wiki_tool, arxiv_tool]
 
-# ---------------- SESSION STATE ---------------- #
+# ---------------- CHAT HISTORY ---------------- #
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Hi! I am an AI assistant with web search capabilities. How can I help you?"
+            "content": "Hi! I can search the web. Ask me anything."
         }
     ]
 
-# Display chat history
+# Display messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# ---------------- CHAT INPUT ---------------- #
+# ---------------- USER INPUT ---------------- #
 
 prompt = st.chat_input("Ask anything...")
 
 if prompt:
 
-    # Check API key
     if not api_key:
         st.error("Please enter your Groq API key.")
         st.stop()
 
-    # Store user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -95,7 +94,6 @@ if prompt:
         }
     )
 
-    # Display user message
     with st.chat_message("user"):
         st.write(prompt)
 
@@ -107,39 +105,53 @@ if prompt:
         streaming=True
     )
 
-    # ---------------- AGENT ---------------- #
+    # ---------------- PROMPT TEMPLATE ---------------- #
 
-    agent = initialize_agent(
-        tools=tools,
+    react_prompt = hub.pull("hwchase17/react")
+
+    # ---------------- CREATE AGENT ---------------- #
+
+    agent = create_react_agent(
         llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        tools=tools,
+        prompt=react_prompt
+    )
+
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
         verbose=True,
         handle_parsing_errors=True
     )
 
-    # ---------------- ASSISTANT RESPONSE ---------------- #
+    # ---------------- RESPONSE ---------------- #
 
     with st.chat_message("assistant"):
 
         st_cb = StreamlitCallbackHandler(
-            parent_container=st.container(),
+            st.container(),
             expand_new_thoughts=False
         )
 
         try:
-            # IMPORTANT FIX:
-            # agent.run() expects STRING input not message list
-            response = agent.run(
-                prompt,
-                callbacks=[st_cb]
+
+            response = agent_executor.invoke(
+                {
+                    "input": prompt
+                },
+                {
+                    "callbacks": [st_cb]
+                }
             )
 
-            st.write(response)
+            output = response["output"]
+
+            st.write(output)
 
             st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": response
+                    "content": output
                 }
             )
 
