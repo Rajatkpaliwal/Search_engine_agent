@@ -85,12 +85,14 @@ if prompt:
 
     llm = ChatGroq(
         groq_api_key=api_key,
-        model_name="llama-3.3-70b-versatile"
+        model_name="llama-3.3-70b-versatile",
+        temperature=0
     )
 
+    llm_with_tools = llm.bind_tools(tools)
 
     agent = create_agent(
-        model=llm,
+        model=llm_with_tools,
         tools=tools
     )
 
