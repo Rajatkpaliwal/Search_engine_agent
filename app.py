@@ -14,7 +14,7 @@ from langchain_community.utilities import (
     ArxivAPIWrapper,
 )
 
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 load_dotenv()
 st.set_page_config(
