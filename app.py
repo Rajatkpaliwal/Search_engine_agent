@@ -1,22 +1,22 @@
+import warnings
 import streamlit as st
 from dotenv import load_dotenv
-
 from langchain_groq import ChatGroq
-
 from langchain_community.tools import (
     DuckDuckGoSearchRun,
     WikipediaQueryRun,
     ArxivQueryRun,
 )
-
 from langchain_community.utilities import (
     WikipediaAPIWrapper,
     ArxivAPIWrapper,
 )
+from langgraph.prebuilt import create_react_agent
 
-from langchain.agents import create_agent
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 load_dotenv()
+
 st.set_page_config(
     page_title="AI Search Agent",
     page_icon="🔍",
@@ -24,7 +24,6 @@ st.set_page_config(
 )
 
 st.title("🔍 AI Search Agent")
-
 st.sidebar.title("Settings")
 
 api_key = st.sidebar.text_input(
@@ -50,7 +49,6 @@ arxiv_tool = ArxivQueryRun(
 
 tools = [search_tool, wiki_tool, arxiv_tool]
 
-
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -62,7 +60,6 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
-
 
 prompt = st.chat_input("Ask anything...")
 
@@ -82,26 +79,17 @@ if prompt:
     with st.chat_message("user"):
         st.write(prompt)
 
-
     llm = ChatGroq(
         groq_api_key=api_key,
         model_name="llama-3.3-70b-versatile",
         temperature=0
     )
 
-    llm_with_tools = llm.bind_tools(tools)
-
-    agent = create_agent(
-        model=llm_with_tools,
-        tools=tools
-    )
+    agent = create_react_agent(model=llm, tools=tools)
 
     with st.chat_message("assistant"):
-
         with st.spinner("Thinking..."):
-
             try:
-
                 response = agent.invoke(
                     {
                         "messages": [
@@ -113,7 +101,15 @@ if prompt:
                     }
                 )
 
-                output = response["messages"][-1].content
+                last_message = response["messages"][-1]
+
+                if isinstance(last_message.content, list):
+                    output = " ".join(
+                        block.get("text", "") for block in last_message.content
+                        if isinstance(block, dict)
+                    )
+                else:
+                    output = last_message.content
 
                 st.write(output)
 
